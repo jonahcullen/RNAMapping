@@ -51,21 +51,19 @@ SFTP = SFTPRemoteProvider(username='cull0084',private_key=key)
 #    
 #SE_SAMPLES = [k for k, v in Counter(se_samples_tmp).items() if v == 1]
 
-#SAMPLES, = SFTP.glob_wildcards(os.path.join(f"{config['MSI_INPUT']}","{sample}_R2_001.fastq.gz"))
 
-#SAMPLES, = SFTP.glob_wildcards("/home/mccuem/data_release/umgc/novaseq/190306_A00223_0089_BH5HJ5DRXX/McCue_Project_032/{sample}_R2_001.fastq.gz")
-SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu/home/fried255/cull0084/SNAKETEST/{sample}_R2_001.fastq.gz")
+#SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu/home/mccuem/cull0084/projects/horse_gene_annotation/data/pbmc/BioProject_PRJEB7497_fastq/{sample}_2.fastq")
+#SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu/home/mccuem/cull0084/projects/horse_gene_annotation/data/pbmc/SNAKE_TEST/{sample}_2.fastq")
 
-#client = paramiko.SSHClient()
-#client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-#client.connect('login.msi.umn.edu', username='cull0084', key_filename='/project/cull0084/.ssh/id_rsa')
-#sftp = client.open_sftp() 
-#
-#SAMPLES = []
-#
-#for filename in sftp.listdir("/home/fried255/cull0084/SNAKETEST/"):
-#    if fnmatch.fnmatch(filename, "*_R2_001.fastq.gz"):
-#        SAMPLES.append(filename)
+ALL_SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu/home/mccuem/cull0084/projects/horse_gene_annotation/data/pbmc/BioProject_PRJEB7497_fastq/{sample}_2.fastq")
+
+UNSTIM_SAMPLES = []
+with open("/scratch/BioProject_PRJEB7497/unstim.list") as f:
+    for line in f:
+        UNSTIM_SAMPLES.append(line.strip())
+
+SAMPLES = list(set(ALL_SAMPLES) & set(UNSTIM_SAMPLES))
+#print(SAMPLES)
 
 #REF_GFF = [f"{config['NCBI_GCF']}", f"{config['ENSEMBL_GCA']}"]
 REF_GFF = [f"{config['NCBI_GCF']}"]
@@ -76,13 +74,13 @@ rule all:
 #        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/{sample}.gff',sample=SAMPLES,GCF=REF_GFF),
 #        f"HorseGeneAnnotation/public/refgen/{config['NCBI_GCF']}/paired_end/GFF/Merged/transcript_fpkm.tsv",
 #        f"HorseGeneAnnotation/public/refgen/{config['NCBI_GCF']}/paired_end/GFF/Merged/gene_fpkm.tsv"
-        expand('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam',GCF=REF_GFF,sample=SAMPLES)
-#        expand('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}.sorted.bam',GCF=REF_GFF,sample=SAMPLES)
-#        S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/{sample}.gff',GCF=REF_GFF,sample=SAMPLES))
-#        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged.gff',GCF=REF_GFF),
-#        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/{sample}.gff',sample=SAMPLES,GCF=REF_GFF)
-        #expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/transcript_fpkm.tsv',GCF=REF_GFF),
-        #expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/gene_fpkm.tsv',GCF=REF_GFF)
+##        expand('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam',GCF=REF_GFF,sample=SAMPLES)
+##        expand('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}.sorted.bam',GCF=REF_GFF,sample=SAMPLES)
+##        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/{sample}.gff',GCF=REF_GFF,sample=SAMPLES)
+##        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged.gff',GCF=REF_GFF),
+##       expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/{sample}.gff',sample=SAMPLES,GCF=REF_GFF)
+        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/transcript_fpkm.tsv',GCF=REF_GFF),
+        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/gene_fpkm.tsv',GCF=REF_GFF)
 
 # ----------------------------------------------------------
 #       Trimming
@@ -92,8 +90,8 @@ rule pe_trim_reads:
     input:
         #R1 = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/fastq/{sample}_R1_001.fastq.gz'),
         #R2 = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/fastq/{sample}_R2_001.fastq.gz')
-        R1 = SFTP.remote('login.msi.umn.edu/home/fried225/cull0084/SNAKETEST/{sample}_R1_001.fastq.gz'),
-        R2 = SFTP.remote('login.msi.umn.edu/home/fried225/cull0084/SNAKETEST/{sample}_R2_001.fastq.gz')
+        R1 = SFTP.remote('login.msi.umn.edu/home/mccuem/cull0084/projects/horse_gene_annotation/data/pbmc/BioProject_PRJEB7497_fastq/{sample}_1.fastq'),
+        R2 = SFTP.remote('login.msi.umn.edu/home/mccuem/cull0084/projects/horse_gene_annotation/data/pbmc/BioProject_PRJEB7497_fastq/{sample}_2.fastq')
     output:
         R1 = temp('pe_trimmed_data/{sample}_trim1.fastq.gz'),
         R2 = temp('pe_trimmed_data/{sample}_trim2.fastq.gz')
@@ -240,8 +238,7 @@ rule pe_STAR_mapping:
         R2 = 'pe_trimmed_data/{sample}_trim2.fastq.gz',
         star_dl = 'HorseGeneAnnotation/public/refgen/{GCF}/STAR_INDICES/download.done'
     output:
-#        S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam')
-        'HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam'
+        S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam')
     params:
         out_prefix = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_'),
         star_index = 'HorseGeneAnnotation/public/refgen/{GCF}/STAR_INDICES'
@@ -310,16 +307,16 @@ rule pe_STAR_mapping:
 ##       StringTie
 ## ----------------------------------------------------------
 #
-## SORT BAMS
-#rule pe_sort_bam:
-#    input:
-#        bam = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam')
-#    output:
-#        sortedbam = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}.sorted.bam')
-#    shell:
-#        '''
-#        samtools view -u {input.bam} | samtools sort - -o {output.sortedbam}
-#        '''
+# SORT BAMS
+rule pe_sort_bam:
+    input:
+        bam = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam')
+    output:
+        sortedbam = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}.sorted.bam')
+    shell:
+        '''
+        samtools view -u {input.bam} | samtools sort - -o {output.sortedbam}
+        '''
 #
 ##rule se_sort_bam:
 ##    input:
@@ -331,22 +328,22 @@ rule pe_STAR_mapping:
 ##        samtools view -u {input.bam} | samtools sort -o {output.sorted_bam}
 ##        '''
 #
-## RUN STRINGTIE
-#rule pe_run_stringtie:
-#    input:
-#        #bam = S3.remote(ancient('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}.sorted.bam'),keep_local=True),
-#        #ref_gff = S3.remote(ancient('HorseGeneAnnotation/public/refgen/{GCF}/{GCF}_genomic.nice.gff.gz'),keep_local=True)
-#        bam = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}.sorted.bam'),
-#        ref_gff = S3.remote('HorseGeneAnnotation/public/refgen/{GCF}/{GCF}_genomic.nice.gff.gz',keep_local=True)
-#    output:
-#        gff = S3.remote('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/{sample}.gff',keep_local=True)
-#    run:
-#        shell('''
-#        stringtie \
-#        {input.bam} \
-#        -G {input.ref_gff} \
-#        -o {output.gff}
-#        ''')
+# RUN STRINGTIE
+rule pe_run_stringtie:
+    input:
+        bam = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}.sorted.bam'),
+        ref_gff = S3.remote('HorseGeneAnnotation/public/refgen/{GCF}/{GCF}_genomic.nice.gff.gz',keep_local=True)
+    output:
+        gff = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/{sample}.gff'
+    log:
+	'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/{sample}.log'
+    run:
+        shell('''
+        stringtie \
+        {input.bam} \
+        -G {input.ref_gff} \
+        -o {output.gff}
+        ''')
 #
 ##rule se_run_stringtie:
 ##    input:
@@ -362,31 +359,37 @@ rule pe_STAR_mapping:
 ##        -o {output.gff}
 ##        ''')
 #
-#rule create_merged_GFF_file:
-#    input:
+rule create_merged_GFF_file:
+    input:
 #        gffs = S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/{sample}.gff',sample=SAMPLES,GCF=REF_GFF))
-#    output:
-#        gff_list = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/all_GFFs_list.txt',
-#    run:
-#        with open(output.gff_list,'w') as OUT:
-#            print('\n'.join(input.gffs),file=OUT)
+        gffs = expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/{sample}.gff',sample=SAMPLES,GCF=REF_GFF)
+    output:
+        gff_list = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/all_GFFs_list.txt',
+    log:
+	'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/all_GFFs_list.log'
+    run:
+        with open(output.gff_list,'w') as OUT:
+            print('\n'.join(input.gffs),file=OUT)
 #
 #
-## STRINGTIE ON MERGE
-#rule pe_stringtie_merge:
-#    input:
+# STRINGTIE ON MERGE
+rule pe_stringtie_merge:
+    input:
 #        gffs = S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/{sample}.gff',sample=SAMPLES,GCF=REF_GFF)),
-#        ref_gff = S3.remote(ancient('HorseGeneAnnotation/public/refgen/{GCF}/{GCF}_genomic.nice.gff.gz')),
-#        gff_list = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/all_GFFs_list.txt'
-#    output:
-#        merged_gff = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged.gff'
-#    run:
-#        shell('''
-#            stringtie \
-#            --merge -p 10 -o {output.merged_gff} \
-#            -G {input.ref_gff} \
-#            {input.gff_list}
-#        ''')
+        gffs = expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/{sample}.gff',sample=SAMPLES,GCF=REF_GFF),
+	ref_gff = S3.remote('HorseGeneAnnotation/public/refgen/{GCF}/{GCF}_genomic.nice.gff.gz'),
+        gff_list = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/all_GFFs_list.txt'
+    output:
+        merged_gff = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged.gff'
+    log:
+	'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged.log'
+    run:
+        shell('''
+            stringtie \
+            --merge -p 10 -o {output.merged_gff} \
+            -G {input.ref_gff} \
+            {input.gff_list}
+        ''')
 #
 ##rule se_stringtie_merge:
 ##    input:
@@ -404,25 +407,25 @@ rule pe_STAR_mapping:
 ##        all_GFFs_list.txt
 ##        ''')
 #
-## STRINGTIE RECALC ON MERGE
-#rule pe_stringtie_recalculate_on_merged:
-#    input:
-#        #bam = expand('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}.sorted.bam',sample=SAMPLES,GCF=REF_GFF),
-#        #merged_gff = expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged.gff',GCF=REF_GFF)
-#        bam = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}.sorted.bam'),
-#        merged_gff = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged.gff'
-#    output:
-#        countsdir = directory('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/counts'),
-#        gff = S3.remote('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/{sample}.gff',keep_local=True)
-#    run:
-#        shell('''
-#        stringtie \
-#        -e \
-#        -b {output.countsdir}\
-#        -G {input.merged_gff} \
-#        -o {output.gff} \
-#        {input.bam}
-#        ''')
+# STRINGTIE RECALC ON MERGE
+rule pe_stringtie_recalculate_on_merged:
+    input:
+        #bam = expand('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}.sorted.bam',sample=SAMPLES,GCF=REF_GFF),
+        #merged_gff = expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged.gff',GCF=REF_GFF)
+        bam = 'HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}.sorted.bam',
+        merged_gff = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged.gff'
+    output:
+        countsdir = directory('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/counts'),
+        gff = S3.remote('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/{sample}.gff',keep_local=True)
+    run:
+        shell('''
+        stringtie \
+        -e \
+        -b {output.countsdir}\
+        -G {input.merged_gff} \
+        -o {output.gff} \
+        {input.bam}
+        ''')
 #
 ##rule se_stringtie_recalc_on_merged:
 ##    input:
@@ -458,19 +461,39 @@ rule pe_STAR_mapping:
 ##        touch('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/counts/download.done')
 #
 #
-#rule pe_make_FPKM_tables:
+rule pe_make_FPKM_tables:
+    input:
+        #counts_dl = expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/counts/download.done',GCF=REF_GFF,sample=SAMPLES)
+        counts = expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/counts',GCF=REF_GFF,sample=SAMPLES)
+    output:
+        transcript_fpkm = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/transcript_fpkm.tsv',
+        gene_fpkm = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/gene_fpkm.tsv'
+    run:
+        import pandas as pd
+        import numpy  as np
+        dfs = []
+        ctabs = [os.path.join(c,'t_data.ctab') for c in input.counts]
+        for sample,f in zip(SAMPLES,ctabs):
+            df = pd.read_table(f)
+            df['sample'] = sample
+            dfs.append(df)
+        df = pd.concat(dfs)
+        by_transcript = pd.pivot_table(df,index='t_name',columns='sample',values='FPKM')
+        by_transcript.to_csv(output.transcript_fpkm,sep='\t')
+        by_gene = pd.pivot_table(df,index='gene_name',columns='sample',values='FPKM',aggfunc=np.mean)
+        by_gene.to_csv(output.gene_fpkm,sep='\t')
+
+#rule se_make_FPKM_tables:
 #    input:
-#        #counts_dl = expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/counts/download.done',GCF=REF_GFF,sample=SAMPLES)
-#        counts = expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/counts',GCF=REF_GFF,sample=SAMPLES)
+#        counts = expand('/scratch/single_end_mapping/refgen/{GCF}/GFF/Merged/{sample}/counts/t_data.ctab', GCF=config['GCF'], sample=SE_SAMPLES)
 #    output:
-#        transcript_fpkm = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/transcript_fpkm.tsv',
-#        gene_fpkm = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/gene_fpkm.tsv'
+#        transcript_fpkm = f"/scratch/single_end_mapping/refgen/{config['GCF']}/GFF/Merged/transcript_fpkm.tsv",
+#        gene_fpkm = f"/scratch/single_end_mapping/refgen/{config['GCF']}/GFF/Merged/gene_fpkm.tsv"
 #    run:
 #        import pandas as pd
-#        import numpy  as np
+#        import numpy as np
 #        dfs = []
-#        ctabs = [os.path.join(c,'t_data.ctab') for c in input.counts]
-#        for sample,f in zip(SAMPLES,ctabs):
+#        for sample,f in zip(SE_SAMPLES,input):
 #            df = pd.read_table(f)
 #            df['sample'] = sample
 #            dfs.append(df)
@@ -479,24 +502,4 @@ rule pe_STAR_mapping:
 #        by_transcript.to_csv(output.transcript_fpkm,sep='\t')
 #        by_gene = pd.pivot_table(df,index='gene_name',columns='sample',values='FPKM',aggfunc=np.mean)
 #        by_gene.to_csv(output.gene_fpkm,sep='\t')
-#
-##rule se_make_FPKM_tables:
-##    input:
-##        counts = expand('/scratch/single_end_mapping/refgen/{GCF}/GFF/Merged/{sample}/counts/t_data.ctab', GCF=config['GCF'], sample=SE_SAMPLES)
-##    output:
-##        transcript_fpkm = f"/scratch/single_end_mapping/refgen/{config['GCF']}/GFF/Merged/transcript_fpkm.tsv",
-##        gene_fpkm = f"/scratch/single_end_mapping/refgen/{config['GCF']}/GFF/Merged/gene_fpkm.tsv"
-##    run:
-##        import pandas as pd
-##        import numpy as np
-##        dfs = []
-##        for sample,f in zip(SE_SAMPLES,input):
-##            df = pd.read_table(f)
-##            df['sample'] = sample
-##            dfs.append(df)
-##        df = pd.concat(dfs)
-##        by_transcript = pd.pivot_table(df,index='t_name',columns='sample',values='FPKM')
-##        by_transcript.to_csv(output.transcript_fpkm,sep='\t')
-##        by_gene = pd.pivot_table(df,index='gene_name',columns='sample',values='FPKM',aggfunc=np.mean)
-##        by_gene.to_csv(output.gene_fpkm,sep='\t')
-#
+
