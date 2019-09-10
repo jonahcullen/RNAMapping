@@ -19,9 +19,9 @@ The file hierarchy looks like:
 	    refgen/
 	        {NCBI_GCF,ENSEMBL_GCA}/
 		    STAR_INDICES/
-       	            {single_end,paired_end}/
-	                GFF/
-		            Merged/
+       	            	{single_end,paired_end}/
+	                    GFF/
+		                Merged/
 
 '''
 
@@ -80,7 +80,8 @@ rule all:
 ##        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged.gff',GCF=REF_GFF),
 ##       expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/{sample}.gff',sample=SAMPLES,GCF=REF_GFF)
         expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/transcript_fpkm.tsv',GCF=REF_GFF),
-        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/gene_fpkm.tsv',GCF=REF_GFF)
+        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/gene_fpkm.tsv',GCF=REF_GFF),
+        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/MFCohort_TPM.tsv',GCF=REF_GFF)
 
 # ----------------------------------------------------------
 #       Trimming
@@ -228,7 +229,7 @@ rule ensembl_STAR_index:
     output:
         touch(expand('HorseGeneAnnotation/public/refgen/{GCA}/STAR_INDICES/download.done',GCA=config['ENSEMBL_GCA']))
 
-## ----------------------------------------------------------
+# ----------------------------------------------------------
 #       STAR mapping
 # ----------------------------------------------------------
 
@@ -503,3 +504,53 @@ rule pe_make_FPKM_tables:
 #        by_gene = pd.pivot_table(df,index='gene_name',columns='sample',values='FPKM',aggfunc=np.mean)
 #        by_gene.to_csv(output.gene_fpkm,sep='\t')
 
+# ----------------------------------------------------------
+#       Make TPM matrix
+# ----------------------------------------------------------
+
+# need index
+
+rule SALMON_mapping:
+    input:
+        R1 = 'pe_trimmed_data/{sample}_trim1.fastq.gz',
+        R2 = 'pe_trimmed_data/{sample}_trim2.fastq.gz',
+        refgen = '/scratch/BioProject_PRJEB7497/HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX'
+    output:
+        directory('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}'),
+        'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}/quant.sf'
+    run:
+        shell('''
+            salmon quant \
+            -i {input.refgen} \
+            -l A \
+            -1 {input.R1} \
+            -2 {input.R2} \
+            --validateMappings \
+            -o {output}
+        ''')
+
+rule make_TPM_matrix:
+    input:
+        quant_files = expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}/quant.sf',sample=SAMPLES)
+    output:
+        tpm_matrix = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/MFCohort_TPM.tsv',
+        fat_matrix = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/Fat_TPM.tsv',
+        muscle_matrix = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/Muscle_TPM.tsv'
+    run:
+        tpm = None
+        for n in input.quant_files:                   
+            name = n.split('/')[2]
+            #x = pd.read_table(f"data/SalmonQuant/{n}/quant.sf")                                         
+            x = pd.read_table(n)
+            x = x.loc[:,['Name','TPM']]            
+            x.rename(columns={'Name':'gene','TPM':name},inplace=True)                                      
+            x.set_index('gene',inplace=True)       
+            if tpm is None:                        
+                tpm = x                            
+            else:                                  
+                tpm = tpm.join(x) 
+        # Create the whole matrix
+        tpm.to_csv(output.tpm_matrix,sep='\t')
+        # Create the Fat & Muscle Matrix
+        tpm.loc[:,[x.endswith('F') for x in tpm.columns]].to_csv(output.fat_matrix,sep='\t')
+        tpm.loc[:,[x.endswith('M') for x in tpm.columns]].to_csv(output.muscle_matrix,sep='\t')
