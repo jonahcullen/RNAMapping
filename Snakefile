@@ -58,7 +58,6 @@ SUBSET = ['61M', '35M', '87M', '52M', '17M', '36F', '90M', '66M', '67M', '37M',
           '66F', '65M', '35F', '51F', '40M', '39M']
 
 
-
 #hiseq
 #ALL_SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu/panfs/roc/data_release/3/umgc/pre2018/2015-q4/mccuem/hiseq/151006_D00635_0082_BC7HAHANXX/Project_McCue_Project_022/{sample}_R2_001.fastq")
 
