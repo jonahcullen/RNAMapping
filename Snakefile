@@ -4,6 +4,7 @@ import glob
 import re
 from collections import Counter
 import fnmatch
+import pandas as pd
 
 '''
 The file hierarchy looks like:
@@ -51,19 +52,28 @@ SFTP = SFTPRemoteProvider(username='cull0084',private_key=key)
 #    
 #SE_SAMPLES = [k for k, v in Counter(se_samples_tmp).items() if v == 1]
 
+#SUBSET = ["61M", "35M", "87M", "52M", "17M", "36F", "90M", "66M", "67M", "37M"]
+SUBSET = ['61M', '35M', '87M', '52M', '17M', '36F', '90M', '66M', '67M', '37M',
+          '65F', '67F', '82M', '69F', '12F', '20M', '86M', '39F', '1M', '49M', 
+          '66F', '65M', '35F', '51F', '40M', '39M']
 
-#SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu/home/mccuem/cull0084/projects/horse_gene_annotation/data/pbmc/BioProject_PRJEB7497_fastq/{sample}_2.fastq")
-#SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu/home/mccuem/cull0084/projects/horse_gene_annotation/data/pbmc/SNAKE_TEST/{sample}_2.fastq")
 
-ALL_SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu/home/mccuem/cull0084/projects/horse_gene_annotation/data/pbmc/BioProject_PRJEB7497_fastq/{sample}_2.fastq")
 
-UNSTIM_SAMPLES = []
-with open("/scratch/BioProject_PRJEB7497/unstim.list") as f:
-    for line in f:
-        UNSTIM_SAMPLES.append(line.strip())
+#hiseq
+#ALL_SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu/panfs/roc/data_release/3/umgc/pre2018/2015-q4/mccuem/hiseq/151006_D00635_0082_BC7HAHANXX/Project_McCue_Project_022/{sample}_R2_001.fastq")
 
-SAMPLES = list(set(ALL_SAMPLES) & set(UNSTIM_SAMPLES))
-#print(SAMPLES)
+#novaseq
+ALL_SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu//panfs/roc/data_release/3/umgc/mccuem/novaseq/181112_A00223_0050_AHCWF7DSXX/McCue_Project_032/{sample}_R2_001.fastq.gz")
+
+
+SAMPLES = []
+for i in SUBSET:
+    i = i[:-1] + "_" + i[-1]
+    for j in ALL_SAMPLES:
+        if i in j:
+            SAMPLES.append(j)
+
+print(SAMPLES)
 
 #REF_GFF = [f"{config['NCBI_GCF']}", f"{config['ENSEMBL_GCA']}"]
 REF_GFF = [f"{config['NCBI_GCF']}"]
@@ -81,7 +91,7 @@ rule all:
 ##       expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/{sample}/{sample}.gff',sample=SAMPLES,GCF=REF_GFF)
         expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/transcript_fpkm.tsv',GCF=REF_GFF),
         expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/GFF/Merged/gene_fpkm.tsv',GCF=REF_GFF),
-        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/MFCohort_TPM.tsv',GCF=REF_GFF)
+        expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/novaseq_TPM.tsv',GCF=REF_GFF)
 
 # ----------------------------------------------------------
 #       Trimming
@@ -91,11 +101,11 @@ rule pe_trim_reads:
     input:
         #R1 = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/fastq/{sample}_R1_001.fastq.gz'),
         #R2 = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/fastq/{sample}_R2_001.fastq.gz')
-        R1 = SFTP.remote('login.msi.umn.edu/home/mccuem/cull0084/projects/horse_gene_annotation/data/pbmc/BioProject_PRJEB7497_fastq/{sample}_1.fastq'),
-        R2 = SFTP.remote('login.msi.umn.edu/home/mccuem/cull0084/projects/horse_gene_annotation/data/pbmc/BioProject_PRJEB7497_fastq/{sample}_2.fastq')
+        R1 = SFTP.remote('login.msi.umn.edu/panfs/roc/data_release/3/umgc/mccuem/novaseq/181112_A00223_0050_AHCWF7DSXX/McCue_Project_032/{sample}_R1_001.fastq.gz'),
+        R2 = SFTP.remote('login.msi.umn.edu/panfs/roc/data_release/3/umgc/mccuem/novaseq/181112_A00223_0050_AHCWF7DSXX/McCue_Project_032/{sample}_R2_001.fastq.gz')
     output:
-        R1 = temp('pe_trimmed_data/{sample}_trim1.fastq.gz'),
-        R2 = temp('pe_trimmed_data/{sample}_trim2.fastq.gz')
+        R1 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim1.fastq.gz',
+        R2 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim2.fastq.gz'
 
     message:
         'AdapterRemoval - removing adapters and low quality bases on {wildcards.sample}'
@@ -235,8 +245,8 @@ rule ensembl_STAR_index:
 
 rule pe_STAR_mapping:
     input:
-        R1 = 'pe_trimmed_data/{sample}_trim1.fastq.gz',
-        R2 = 'pe_trimmed_data/{sample}_trim2.fastq.gz',
+        R1 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim1.fastq.gz',
+        R2 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim2.fastq.gz',
         star_dl = 'HorseGeneAnnotation/public/refgen/{GCF}/STAR_INDICES/download.done'
     output:
         S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam')
@@ -512,13 +522,16 @@ rule pe_make_FPKM_tables:
 
 rule SALMON_mapping:
     input:
-        R1 = 'pe_trimmed_data/{sample}_trim1.fastq.gz',
-        R2 = 'pe_trimmed_data/{sample}_trim2.fastq.gz',
-        refgen = '/scratch/BioProject_PRJEB7497/HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX'
+        R1 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim1.fastq.gz',
+        R2 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim2.fastq.gz',
+        refgen = '/scratch/NovaseqComp/novaseq/HorseGeneAnnotation/public/refgen/GCF_002863925.1_EquCab3.0/SALMON_INDEX'
     output:
-        directory('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}'),
+#        directory('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}'),
         'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}/quant.sf'
+    params:
+        out_dir = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}'
     run:
+#        out_dir = os.path.dirname(output)
         shell('''
             salmon quant \
             -i {input.refgen} \
@@ -526,20 +539,21 @@ rule SALMON_mapping:
             -1 {input.R1} \
             -2 {input.R2} \
             --validateMappings \
-            -o {output}
+            -o {params.out_dir}
         ''')
 
 rule make_TPM_matrix:
     input:
-        quant_files = expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}/quant.sf',sample=SAMPLES)
+        quant_files = expand('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}/quant.sf',sample=SAMPLES,GCF=REF_GFF)
     output:
-        tpm_matrix = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/MFCohort_TPM.tsv',
-        fat_matrix = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/Fat_TPM.tsv',
-        muscle_matrix = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/Muscle_TPM.tsv'
+        tpm_matrix = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/novaseq_TPM.tsv',
+#        fat_matrix = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/Fat_TPM.tsv',
+#        muscle_matrix = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/Muscle_TPM.tsv'
     run:
         tpm = None
         for n in input.quant_files:                   
-            name = n.split('/')[2]
+            name = n.split('/')[-2]
+            print(name)
             #x = pd.read_table(f"data/SalmonQuant/{n}/quant.sf")                                         
             x = pd.read_table(n)
             x = x.loc[:,['Name','TPM']]            
@@ -548,9 +562,9 @@ rule make_TPM_matrix:
             if tpm is None:                        
                 tpm = x                            
             else:                                  
-                tpm = tpm.join(x) 
+                tpm = tpm.join(x,lsuffix='gene') 
         # Create the whole matrix
         tpm.to_csv(output.tpm_matrix,sep='\t')
         # Create the Fat & Muscle Matrix
-        tpm.loc[:,[x.endswith('F') for x in tpm.columns]].to_csv(output.fat_matrix,sep='\t')
-        tpm.loc[:,[x.endswith('M') for x in tpm.columns]].to_csv(output.muscle_matrix,sep='\t')
+#        tpm.loc[:,[x.endswith('F') for x in tpm.columns]].to_csv(output.fat_matrix,sep='\t')
+#        tpm.loc[:,[x.endswith('M') for x in tpm.columns]].to_csv(output.muscle_matrix,sep='\t')
