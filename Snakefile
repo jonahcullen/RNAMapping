@@ -266,6 +266,11 @@ rule pe_STAR_mapping:
         --outSAMtype BAM Unsorted \
         ''')
 
+rule bams_merge_lanes:
+    input:
+        S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam')
+
+
 ##rule pe_STAR_mapping:
 ##    input:
 ##        R1 = 'pe_trimmed_data/{sample}_trim1.fastq.gz',
@@ -513,6 +518,33 @@ rule pe_make_FPKM_tables:
 #        by_gene = pd.pivot_table(df,index='gene_name',columns='sample',values='FPKM',aggfunc=np.mean)
 #        by_gene.to_csv(output.gene_fpkm,sep='\t')
 
+
+# ----------------------------------------------------------
+#       SALMON indices
+# ----------------------------------------------------------
+
+rule download_SALMON:
+    input:
+        expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/download.done',GCF=config['NCBI_GCF'])
+#        expand('HorseGeneAnnotation/public/refgen/{GCA}/SALMON_INDEX/download.done',GCA=config['ENSEMBL_GCA'])
+
+#DOES NOT STORE UNMAPPED READS (--outReadsUnmapped) nor log output
+rule ncbi_SALMON_index:
+    input:
+        S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/duplicate_clusters.tsv',GCF=config['NCBI_GCF']),keep_local=True),
+        S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/hash.bin',GCF=config['NCBI_GCF']),keep_local=True),
+        S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/header.json',GCF=config['NCBI_GCF']),keep_local=True),
+        S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/indexing.log',GCF=config['NCBI_GCF']),keep_local=True),
+        S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/quasi_index.log',GCF=config['NCBI_GCF']),keep_local=True),
+        S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/refInfo.json',GCF=config['NCBI_GCF']),keep_local=True),
+        S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/rsd.bin',GCF=config['NCBI_GCF']),keep_local=True),
+        S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/sa.bin',GCF=config['NCBI_GCF']),keep_local=True),
+        S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/txpInfo.bin',GCF=config['NCBI_GCF']),keep_local=True),
+        S3.remote(expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/versionInfo.json',GCF=config['NCBI_GCF']),keep_local=True)
+    output:
+        touch(expand('HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/download.done',GCF=config['NCBI_GCF']))
+
+
 # ----------------------------------------------------------
 #       Make TPM matrix
 # ----------------------------------------------------------
@@ -523,23 +555,25 @@ rule SALMON_mapping:
     input:
         R1 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim1.fastq.gz',
         R2 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim2.fastq.gz',
-        refgen = '/scratch/NovaseqComp/novaseq/HorseGeneAnnotation/public/refgen/GCF_002863925.1_EquCab3.0/SALMON_INDEX'
+        salmon_dl = 'HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX/download.done'
     output:
 #        directory('HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}'),
         'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}/quant.sf'
     params:
+        salmon_index = 'HorseGeneAnnotation/public/refgen/{GCF}/SALMON_INDEX',
         out_dir = 'HorseGeneAnnotation/public/refgen/{GCF}/paired_end/SalmonQuant/{sample}'
     run:
 #        out_dir = os.path.dirname(output)
         shell('''
             salmon quant \
-            -i {input.refgen} \
+            -i {params.salmon_index} \
             -l A \
             -1 {input.R1} \
             -2 {input.R2} \
             --validateMappings \
             -o {params.out_dir}
         ''')
+
 
 rule make_TPM_matrix:
     input:
