@@ -36,7 +36,7 @@ S3 = S3RemoteProvider(
     secret_access_key=s3_access_key
 )
 
-configfile: "config.yaml" 
+configfile: 'config.yaml' 
 
 from snakemake.remote.SFTP import RemoteProvider as SFTPRemoteProvider
 key = paramiko.agent.Agent().get_keys()[0]
@@ -53,26 +53,33 @@ SFTP = SFTPRemoteProvider(username='cull0084',private_key=key)
 #SE_SAMPLES = [k for k, v in Counter(se_samples_tmp).items() if v == 1]
 
 #SUBSET = ["61M", "35M", "87M", "52M", "17M", "36F", "90M", "66M", "67M", "37M"]
-SUBSET = ['61M', '35M', '87M', '52M', '17M', '36F', '90M', '66M', '67M', '37M',
-          '65F', '67F', '82M', '69F', '12F', '20M', '86M', '39F', '1M', '49M', 
-          '66F', '65M', '35F', '51F', '40M', '39M']
+
+SUBSET = ['1M', '12F', '17M', '20M', '35F', '35M', '36F', '37M', '39F', '39M', 
+          '40M', '49M', '51F', '52M', '61M', '65F', '65M', '66F', '66M', '67F', 
+          '67M', '69F', '82M', '86M', '87M', '90M']
 
 
-#hiseq
-#ALL_SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu/panfs/roc/data_release/3/umgc/pre2018/2015-q4/mccuem/hiseq/151006_D00635_0082_BC7HAHANXX/Project_McCue_Project_022/{sample}_R2_001.fastq")
+hiseq = True
 
-#novaseq
-ALL_SAMPLES, = SFTP.glob_wildcards("login.msi.umn.edu//panfs/roc/data_release/3/umgc/mccuem/novaseq/181112_A00223_0050_AHCWF7DSXX/McCue_Project_032/{sample}_R2_001.fastq.gz")
+if hiseq:
+    #hiseq
+    project_path = 'login.msi.umn.edu/panfs/roc/data_release/3/umgc/pre2018/2015-q4/mccuem/hiseq/151006_D00635_0082_BC7HAHANXX/Project_McCue_Project_022'
+    ALL_SAMPLES, = SFTP.glob_wildcards(f'{os.path.join(project_path, "{sample}_R2_001.fastq")}')
+    print(ALL_SAMPLES)
+    SAMPLES = [i for i in ALL_SAMPLES for j in SUBSET if j == i.split('_')[0]]
+    print(SAMPLES)
+else:
+    #novaseq
+    project_path = 'login.msi.umn.edu//panfs/roc/data_release/3/umgc/mccuem/novaseq/181112_A00223_0050_AHCWF7DSXX/McCue_Project_032'
+    ALL_SAMPLES, = SFTP.glob_wildcards(f'{os.path.join(project_path, "{sample}_R2_001.fastq.gz")}')
+    SAMPLES = []
+    for i in SUBSET:
+        i = i[:-1] + '_' + i[-1]
+        for j in ALL_SAMPLES:
+            if i in j:
+                SAMPLES.append(j)
+    print(SAMPLES)
 
-
-SAMPLES = []
-for i in SUBSET:
-    i = i[:-1] + "_" + i[-1]
-    for j in ALL_SAMPLES:
-        if i in j:
-            SAMPLES.append(j)
-
-print(SAMPLES)
 
 #REF_GFF = [f"{config['NCBI_GCF']}", f"{config['ENSEMBL_GCA']}"]
 REF_GFF = [f"{config['NCBI_GCF']}"]
@@ -100,8 +107,8 @@ rule pe_trim_reads:
     input:
         #R1 = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/fastq/{sample}_R1_001.fastq.gz'),
         #R2 = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/fastq/{sample}_R2_001.fastq.gz')
-        R1 = SFTP.remote('login.msi.umn.edu/panfs/roc/data_release/3/umgc/mccuem/novaseq/181112_A00223_0050_AHCWF7DSXX/McCue_Project_032/{sample}_R1_001.fastq.gz'),
-        R2 = SFTP.remote('login.msi.umn.edu/panfs/roc/data_release/3/umgc/mccuem/novaseq/181112_A00223_0050_AHCWF7DSXX/McCue_Project_032/{sample}_R2_001.fastq.gz')
+        R1 = SFTP.remote(f'{project_path}/{{sample}}_R1_001.fastq.gz'),
+        R2 = SFTP.remote(f'{project_path}/{{sample}}_R2_001.fastq.gz')
     output:
         R1 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim1.fastq.gz',
         R2 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim2.fastq.gz'
@@ -265,10 +272,6 @@ rule pe_STAR_mapping:
         --outFileNamePrefix {params.out_prefix} \
         --outSAMtype BAM Unsorted \
         ''')
-
-rule bams_merge_lanes:
-    input:
-        S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam')
 
 
 ##rule pe_STAR_mapping:

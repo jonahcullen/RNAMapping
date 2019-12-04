@@ -53,12 +53,11 @@ SFTP = SFTPRemoteProvider(username='cull0084',private_key=key)
 #    
 #SE_SAMPLES = [k for k, v in Counter(se_samples_tmp).items() if v == 1]
 
-#SUBSET = ["61M", "35M", "87M", "52M", "17M", "36F", "90M", "66M", "67M", "37M"]
 
-SUBSET = ['1M', '12F', '17M', '20M', '35F', '35M', '36F', '37M', '39F', '39M', 
-          '40M', '49M', '51F', '52M', '61M', '65F', '65M', '66F', '66M', '67F', 
-          '67M', '69F', '82M', '86M', '87M', '90M']
-
+#SUBSET = ['1M', '12F', '17M', '20M', '35F', '35M', '36F', '37M', '39F', '39M', 
+#          '40M', '49M', '51F', '52M', '61M', '65F', '65M', '66F', '66M', '67F', 
+#          '67M', '69F', '82M', '86M', '87M', '90M']
+SUBSET = ['12F', '17M', '1M', '20M', '35F']
 
 hiseq = True
 
@@ -329,7 +328,6 @@ rule pe_STAR_mapping:
 #       Sort BAMs
 # ----------------------------------------------------------
 
-# SORT BAMS
 rule pe_sort_bam:
     input:
         bam = S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam')
@@ -359,19 +357,18 @@ rule compose_merge:
                 if i == os.path.basename(j.split('_')[0]):
                     if len(d[i]) < 2:
                         d[i].append(j)
-        cmds = [f'samtools merge {v[0]}_{v[1][-4:]}.merged.sorted.bam {v[0]} {v[1]}' 
+        cmds = [f'samtools merge {v[0]}_{v[1][-4:]}.sorted.bam {v[0]} {v[1]}' 
                 for v in d.values() 
                 if len(v) > 1]
-
+        print(cmds)
         with open(output.txt, 'w') as out:
             for v in d.values():
                 if len(v) > 1:
-                    print(f'S3.remote({v[0]}_{v[1][-4:]})'
+                    print(f'{v[0]}_{v[1][-4:]}.sorted.bam', file=out)
+                else:
+                    print(v+'.sorted.bam', file=out) 
 
 
-rule merge_aligned_bams:
-    input:
-        S3.remote('HorseGeneAnnotation/private/sequence/RNASEQ/bam/{GCF}/paired_end/{sample}_Aligned.out.bam')
 ##rule se_sort_bam:
 ##    input:
 ##        bam = '/scratch/single_end_mapping/star_map_se/RNASEQ/bam/{sample}_se_Aligned.out.bam'
