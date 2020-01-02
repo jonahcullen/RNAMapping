@@ -57,7 +57,7 @@ SUBSET = ['1M', '12F', '17M', '20M', '35F', '35M', '36F', '37M', '39F', '39M',
 
 PRIV_BUCKET = config['BUCKET']['PRIVATE']
 PUB_BUCKET = config['BUCKET']['PUBLIC']
-PLATFORM = 'hiseq'
+PLATFORM = 'novaseq'
 #ASSEMBLY = config['ASSEMBLY']['NCBI']
 ASSEMBLY = config['ASSEMBLY']['ENSEMBL']
 
@@ -70,7 +70,8 @@ rule all:
         #f'{PUB_BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/GFF/all_GFFs_list.txt'
         #f'{PUB_BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/GFF/Merged.gff'
         S3.remote(f'{PUB_BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/GFF/Merged/transcript_fpkm.tsv',keep_local=True),
-        S3.remote(f'{PUB_BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/GFF/Merged/gene_fpkm.tsv',keep_local=True)
+        S3.remote(f'{PUB_BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/GFF/Merged/gene_fpkm.tsv',keep_local=True),
+        S3.remote(f'{PUB_BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/SalmonQuant/novaseq_TPM.tsv',keep_local=True)
 #        f'{PUB_BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/SalmonQuant/novaseq_TPM.tsv'
 
 # ----------------------------------------------------------
@@ -254,17 +255,20 @@ rule SALMON_mapping:
     params:
         salmon_index = f'{PUB_BUCKET}/{ASSEMBLY}/SALMON_INDEX',
         out_dir = f'{PUB_BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/SalmonQuant/{{sample}}'
-    run:
-#        out_dir = os.path.dirname(output)
-        shell('''
+    threads:
+        int(f'{int(config["THREADS"]["SALMON"])}')
+    shell:
+        '''
             salmon quant \
-            -i {params.salmon_index} \
-            -l A \
-            -1 {input.R1} \
-            -2 {input.R2} \
-            --validateMappings \
-            -o {params.out_dir}
-        ''')
+                -p {threads} \
+                -i {params.salmon_index} \
+                -l A \
+                -1 {input.R1} \
+                -2 {input.R2} \
+                --validateMappings \
+                -o {params.out_dir} &&
+            mc cp -r {params.out_dir} s3/{params.out_dir}
+        '''
 
 
 rule make_TPM_matrix:

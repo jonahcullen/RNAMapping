@@ -29,7 +29,7 @@ SUBSET = ['1M', '12F', '17M', '20M', '35F', '35M', '36F', '37M', '39F', '39M',
           '67M', '69F', '82M', '86M', '87M', '90M']
 #SUBSET = ['12F', '17M', '1M', '20M', '35F']
 
-hiseq = True
+hiseq = False
 
 if hiseq:
     PLATFORM = 'hiseq'
@@ -41,25 +41,28 @@ if hiseq:
 #    print(SAMPLES)
 else:
     PLATFORM = 'novaseq'
-    PROJECT_PATH = 'login.msi.umn.edu//panfs/roc/data_release/3/umgc/mccuem/novaseq/181112_A00223_0050_AHCWF7DSXX/McCue_Project_032'
+    PROJECT_PATH = 'login.msi.umn.edu/panfs/roc/data_release/3/umgc/mccuem/novaseq/181112_A00223_0050_AHCWF7DSXX/McCue_Project_032'
     ALL_SAMPLES, = SFTP.glob_wildcards(f'{os.path.join(PROJECT_PATH, "{sample}_R2_001.fastq.gz")}')
     ZIPPED = '.gz'
     SAMPLES = []
     for i in SUBSET:
         i = i[:-1] + '_' + i[-1]
         for j in ALL_SAMPLES:
-            if i in j:
+            if i == '_'.join(j.split('_', 2)[:2]):
                 SAMPLES.append(j)
 #    print(SAMPLES)
 
 
-ASSEMBLY = config['NCBI_GCF']
+#ASSEMBLY = config['NCBI_GCF']
+ASSEMBLY = config['ENSEMBL_GCA']
+ALIGNER = config['ALIGNER']
 BUCKET = config['BUCKET']
 
 
 rule all:
     input:
-        f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/merge.txt'
+        f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/merge_{ALIGNER}.list'
+
 
 # ----------------------------------------------------------
 #       Trimming
@@ -70,8 +73,8 @@ rule pe_trim_reads:
         R1 = SFTP.remote(f'{PROJECT_PATH}/{{sample}}_R1_001.fastq{ZIPPED}'),
         R2 = SFTP.remote(f'{PROJECT_PATH}/{{sample}}_R2_001.fastq{ZIPPED}')
     output:
-        R1 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim1.fastq.gz',
-        R2 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim2.fastq.gz'
+        R1 = f'HorseGeneAnnotation/private/sequence/trimmed/{PLATFORM}/{{sample}}_trim1.fastq.gz',
+        R2 = f'HorseGeneAnnotation/private/sequence/trimmed/{PLATFORM}/{{sample}}_trim2.fastq.gz'
 
     message:
         'AdapterRemoval - removing adapters and low quality bases on {wildcards.sample}'
@@ -144,13 +147,13 @@ rule ensembl_STAR_index:
 
 rule pe_STAR_mapping:
     input:
-        R1 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim1.fastq.gz',
-        R2 = 'HorseGeneAnnotation/private/sequence/trimmed/{sample}_trim2.fastq.gz',
+        R1 = f'HorseGeneAnnotation/private/sequence/trimmed/{PLATFORM}/{{sample}}_trim1.fastq.gz',
+        R2 = f'HorseGeneAnnotation/private/sequence/trimmed/{PLATFORM}/{{sample}}_trim2.fastq.gz',
         star_dl = f'HorseGeneAnnotation/public/refgen/{ASSEMBLY}/STAR_INDICES/download.done'
     output:
-        S3.remote(f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/{{sample}}_Aligned.out.bam',keep_local=True)
+        S3.remote(f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/{ALIGNER}/{{sample}}_Aligned.out.bam')
     params:
-        out_prefix = S3.remote(f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/{{sample}}_'),
+        out_prefix = S3.remote(f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/{ALIGNER}/{{sample}}_'),
         star_index = f'HorseGeneAnnotation/public/refgen/{ASSEMBLY}/STAR_INDICES'
     message:
         'STAR - Creating: {output} '
@@ -173,9 +176,9 @@ rule pe_STAR_mapping:
 
 rule pe_sort_bam:
     input:
-        bam = S3.remote(f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/{{sample}}_Aligned.out.bam')
+        bam = S3.remote(f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/{ALIGNER}/{{sample}}_Aligned.out.bam')
     output:
-        sortedbam = S3.remote(f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/{{sample}}.sorted.bam',keep_local=True)
+        sortedbam = S3.remote(f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/{ALIGNER}/{{sample}}.sorted.bam')
     shell:
         '''
         samtools view -u {input.bam} | samtools sort - -o {output.sortedbam}
@@ -187,30 +190,40 @@ rule pe_sort_bam:
 
 rule compose_merge:
     input:
-        bams = S3.remote(expand(f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/{{sample}}.sorted.bam', sample=SAMPLES))
+        bams = S3.remote(expand(f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/{ALIGNER}/{{sample}}.sorted.bam',sample=SAMPLES),keep_local=True)
     output:
-        txt = f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/merge.txt'
+        txt = f'{BUCKET}/{ASSEMBLY}/paired_end/{PLATFORM}/merge_{ALIGNER}.list'
     run:
 #        with open(output.txt, 'w') as out:
 #            print(*input, sep="\n", file=out)
         d = defaultdict(list)
         for i in input.bams:
-            i = os.path.basename(i.split('_')[0])
+            i = os.path.basename(i).split('_')[0]
             for j in input.bams:
-                if i == os.path.basename(j.split('_')[0]):
+                if i == os.path.basename(j).split('_')[0]:
                     if len(d[i]) < 2:
                         d[i].append(j)
-        cmds = [f'samtools merge {v[0]}_{v[1][-4:]}.sorted.bam {v[0]} {v[1]}' 
-                for v in d.values() 
-                if len(v) > 1]
-        print(cmds)
         with open(output.txt, 'w') as out:
             for v in d.values():
                 if len(v) > 1:
-                    print(f'{v[0]}_{v[1][-4:]}.sorted.bam', file=out)
-                else:
-                    print(v+'.sorted.bam', file=out) 
+                    out_dir = os.path.dirname(v[0])
+                    b1 = os.path.basename(v[0]).split(".")[0]
+                    b2 = os.path.basename(v[1]).split(".")[0][-4:]
 
+                    cmd = (
+                           'samtools merge '
+                           + os.path.join(out_dir,b1+'_'+b2+'.merged.sorted.bam')
+                           + f' {v[0]} {v[1]}'
+                          )
+                else:
+                    cmd = (
+                           'samtools merge '
+                           + v[0].replace('sorted.bam','merged.sorted.bam')
+                           + f' {v[0]}'
+                          )                               
+
+                print(cmd,file=out)
+#                cmds.append(cmd)        
 
 ##rule se_sort_bam:
 ##    input:
